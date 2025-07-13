@@ -86,20 +86,22 @@ async function setupWebhook(calendar, userId, channelUserMap) {
 async function listEvents(calendar, userId, channelUserMap) {
   const currentSyncToken = syncTokens.get(userId);
   let eventsResponse;
+  let syncType;
 
   try {
     // Ensure a webhook is active for this user.
-    // This is a good place to do it, as it runs whenever the user requests data.
     await setupWebhook(calendar, userId, channelUserMap);
 
     if (currentSyncToken) {
       console.log(`Performing incremental sync for user ${userId} with syncToken.`);
+      syncType = 'delta';
       eventsResponse = await calendar.events.list({
         calendarId: 'primary',
         syncToken: currentSyncToken,
       });
     } else {
       console.log(`Performing full sync for user ${userId}.`);
+      syncType = 'full';
       eventsResponse = await calendar.events.list({
         calendarId: 'primary',
         timeMin: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString(), // Look back 30 days
@@ -114,15 +116,16 @@ async function listEvents(calendar, userId, channelUserMap) {
       console.log(`Stored new syncToken for user ${userId}.`);
     }
 
-    return eventsResponse.data.items;
+    return {
+      syncType,
+      items: eventsResponse.data.items || []
+    };
 
   } catch (error) {
     if (error.code === 410) {
       // A 410 error indicates the sync token is invalid or expired.
       console.log(`Sync token invalid for user ${userId}. Clearing token and forcing full sync.`);
       syncTokens.delete(userId);
-      // We could recall listEvents here, or let the client retry.
-      // For simplicity, we'll throw an error and let the client handle it.
       throw new Error('Sync token invalid. Please refresh.');
     } else {
       console.error('Error fetching calendar events:', error);

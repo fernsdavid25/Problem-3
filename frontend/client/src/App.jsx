@@ -39,22 +39,28 @@ function App() {
     if (!user) return;
     try {
       console.log('Fetching events...');
-      const eventData = await fetchAPI(`${API_URL}/api/events`);
-      // A full sync returns all items, an incremental sync returns only changes.
-      // We need to merge them. A simple approach for this demo is to just replace.
-      // A more robust UI would intelligently merge new/updated/deleted items.
-      console.log('Received events:', eventData);
-      setEvents(prevEvents => {
-        const eventMap = new Map(prevEvents.map(e => [e.id, e]));
-        eventData.forEach(event => {
-          if (event.status === 'cancelled') {
-            eventMap.delete(event.id);
-          } else {
-            eventMap.set(event.id, event);
-          }
+      const payload = await fetchAPI(`${API_URL}/api/events`);
+      const { syncType, items: eventData } = payload;
+
+      console.log(`Received ${syncType} update with ${eventData.length} items.`);
+
+      if (syncType === 'full') {
+        // Full sync: Replace the entire list of events.
+        setEvents(eventData.sort((a, b) => new Date(a.start.dateTime || a.start.date) - new Date(b.start.dateTime || b.start.date)));
+      } else {
+        // Delta sync: Merge the changes with the existing events.
+        setEvents(prevEvents => {
+          const eventMap = new Map(prevEvents.map(e => [e.id, e]));
+          eventData.forEach(event => {
+            if (event.status === 'cancelled') {
+              eventMap.delete(event.id);
+            } else {
+              eventMap.set(event.id, event);
+            }
+          });
+          return Array.from(eventMap.values()).sort((a, b) => new Date(a.start.dateTime || a.start.date) - new Date(b.start.dateTime || b.start.date));
         });
-        return Array.from(eventMap.values()).sort((a, b) => new Date(a.start.dateTime || a.start.date) - new Date(b.start.dateTime || b.start.date));
-      });
+      }
     } catch (error) {
       console.error('Failed to fetch events:', error);
     }
