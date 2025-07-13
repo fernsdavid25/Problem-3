@@ -1,0 +1,8 @@
+# Dependencies
+node_modules
+
+# Environment variables
+.env
+
+# Session data (if you were to use a file-based store)
+sessions/ 
